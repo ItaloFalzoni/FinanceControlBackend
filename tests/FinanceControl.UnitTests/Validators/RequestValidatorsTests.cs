@@ -67,4 +67,20 @@ public sealed class RequestValidatorsTests
 
         Assert.Equal(2, errors.Count);
     }
+
+    [Fact]
+    public void ValidateDeposit_NullRequest_ReturnsBodyRequired()
+    {
+        var errors = RequestValidators.Validate((DepositRequest?)null);
+
+        Assert.Contains(errors, e => e.Contains("Request body is required"));
+    }
+
+    [Fact]
+    public void ValidateWithdraw_NullRequest_ReturnsBodyRequired()
+    {
+        var errors = RequestValidators.Validate((WithdrawRequest?)null);
+
+        Assert.Contains(errors, e => e.Contains("Request body is required"));
+    }
 }

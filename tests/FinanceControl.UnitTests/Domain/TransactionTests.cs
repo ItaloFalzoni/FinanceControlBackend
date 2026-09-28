@@ -54,4 +54,11 @@ public sealed class TransactionTests
 
         Assert.Equal(string.Empty, transaction.Description);
     }
+
+    [Fact]
+    public void Reconstitute_UnknownType_ThrowsDomainException()
+    {
+        Assert.Throws<UnknownTransactionTypeException>(() => Transaction.Reconstitute(
+            Guid.NewGuid(), 1000, TransactionType.Unknown, "Sales", DateTimeOffset.UtcNow));
+    }
 }
