@@ -2,13 +2,9 @@ using FinanceControl.API.Domain.Enums;
 
 namespace FinanceControl.API.Application;
 
-// ── Requests (amounts in minor units: cents) ────────────────────────────────
-
 public record DepositRequest(long Amount, string Description);
 
 public record WithdrawRequest(long Amount, string Description);
-
-// ── Responses (amounts in minor units: cents) ──────────────────────────────
 
 public record TransactionResponse(
     Guid Id,

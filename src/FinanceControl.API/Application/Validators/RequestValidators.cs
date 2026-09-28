@@ -9,8 +9,11 @@ public static class RequestValidators
 {
     private const int DescriptionMaxLength = 500;
 
-    public static IReadOnlyList<string> Validate(DepositRequest request)
+    public static IReadOnlyList<string> Validate(DepositRequest? request)
     {
+        if (request is null)
+            return ["Request body is required."];
+
         var errors = new List<string>();
 
         AppendAmountError(request.Amount, "Deposit amount must be greater than zero.", errors);
@@ -19,8 +22,11 @@ public static class RequestValidators
         return errors;
     }
 
-    public static IReadOnlyList<string> Validate(WithdrawRequest request)
+    public static IReadOnlyList<string> Validate(WithdrawRequest? request)
     {
+        if (request is null)
+            return ["Request body is required."];
+
         var errors = new List<string>();
 
         AppendAmountError(request.Amount, "Withdrawal amount must be greater than zero.", errors);

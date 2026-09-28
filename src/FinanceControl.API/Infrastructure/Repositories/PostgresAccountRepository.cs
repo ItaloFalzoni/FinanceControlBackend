@@ -105,6 +105,11 @@ public sealed class PostgresAccountRepository(FinanceControlDbContext dbContext)
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         await LockAccountRowAsync(account.Id, cancellationToken);
+        if (!await dbContext.Accounts.AnyAsync(a => a.Id == account.Id, cancellationToken))
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            throw new AccountNotFoundException(account.Id);
+        }
         var storedBalance = await GetStoredBalanceAsync(account.Id, cancellationToken);
         var existing = await GetExistingTransactionIdsAsync(account.Id, cancellationToken);
 

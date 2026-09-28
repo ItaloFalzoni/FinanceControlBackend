@@ -1,5 +1,6 @@
 using FinanceControl.API.Application.Telemetry;
 using FinanceControl.API.Domain.Entities;
+using FinanceControl.API.Domain.Exceptions;
 using FinanceControl.API.Domain.Repositories;
 
 namespace FinanceControl.API.Application.Services;
@@ -69,7 +70,14 @@ public sealed class AccountService(IAccountRepository repository, IAccountResolv
         if (account is null) return null;
 
         var transaction = account.Deposit(request.Amount, request.Description);
-        await repository.UpdateAsync(account, ct);
+        try
+        {
+            await repository.UpdateAsync(account, ct);
+        }
+        catch (AccountNotFoundException)
+        {
+            return null;
+        }
         AccountTelemetry.CountDeposit();
 
         return MapTransactionToResponse(transaction);
@@ -85,7 +93,14 @@ public sealed class AccountService(IAccountRepository repository, IAccountResolv
         if (account is null) return null;
 
         var transaction = account.Withdraw(request.Amount, request.Description);
-        await repository.UpdateAsync(account, ct);
+        try
+        {
+            await repository.UpdateAsync(account, ct);
+        }
+        catch (AccountNotFoundException)
+        {
+            return null;
+        }
         AccountTelemetry.CountWithdrawal();
 
         return MapTransactionToResponse(transaction);

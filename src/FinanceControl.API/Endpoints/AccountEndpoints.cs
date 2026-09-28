@@ -20,12 +20,14 @@ public static class AccountEndpoints
             .WithName("CreateAccount")
             .WithSummary("Creates the single ledger account")
             .Produces<AccountCreatedResponse>(StatusCodes.Status201Created)
+            .Produces<ErrorResponse>(StatusCodes.Status401Unauthorized)
             .Produces<ErrorResponse>(StatusCodes.Status409Conflict);
 
         group.MapGet("/balance", GetBalanceAsync)
             .WithName("GetBalance")
             .WithSummary("Gets the current balance of the account")
             .Produces<BalanceResponse>()
+            .Produces<ErrorResponse>(StatusCodes.Status401Unauthorized)
             .Produces<ErrorResponse>(StatusCodes.Status404NotFound);
 
         group.MapGet("/transactions", GetHistoryAsync)
@@ -33,6 +35,7 @@ public static class AccountEndpoints
             .WithSummary("Gets the transaction history of the account (paginated)")
             .Produces<TransactionHistoryResponse>()
             .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
+            .Produces<ErrorResponse>(StatusCodes.Status401Unauthorized)
             .Produces<ErrorResponse>(StatusCodes.Status404NotFound);
 
         group.MapPost("/deposit", DepositAsync)
@@ -40,6 +43,7 @@ public static class AccountEndpoints
             .WithSummary("Records a credit (deposit) into the account")
             .Produces<TransactionResponse>(StatusCodes.Status201Created)
             .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
+            .Produces<ErrorResponse>(StatusCodes.Status401Unauthorized)
             .Produces<ErrorResponse>(StatusCodes.Status404NotFound)
             .Produces<ErrorResponse>(StatusCodes.Status422UnprocessableEntity);
 
@@ -48,6 +52,7 @@ public static class AccountEndpoints
             .WithSummary("Records a debit (withdrawal) from the account")
             .Produces<TransactionResponse>(StatusCodes.Status201Created)
             .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
+            .Produces<ErrorResponse>(StatusCodes.Status401Unauthorized)
             .Produces<ErrorResponse>(StatusCodes.Status404NotFound)
             .Produces<ErrorResponse>(StatusCodes.Status422UnprocessableEntity);
 
@@ -92,7 +97,7 @@ public static class AccountEndpoints
     }
 
     private static async Task<IResult> DepositAsync(
-        DepositRequest request,
+        DepositRequest? request,
         AccountService service,
         CancellationToken ct)
     {
@@ -100,14 +105,14 @@ public static class AccountEndpoints
         if (errors.Count > 0)
             return Results.BadRequest(new ErrorResponse("Validation failed", string.Join("; ", errors), errors));
 
-        var result = await service.DepositAsync(request, ct);
+        var result = await service.DepositAsync(request!, ct);
         return result is null
             ? Results.NotFound(new ErrorResponse("Account not found", "No account exists."))
             : Results.Json(result, statusCode: StatusCodes.Status201Created);
     }
 
     private static async Task<IResult> WithdrawAsync(
-        WithdrawRequest request,
+        WithdrawRequest? request,
         AccountService service,
         CancellationToken ct)
     {
@@ -115,7 +120,7 @@ public static class AccountEndpoints
         if (errors.Count > 0)
             return Results.BadRequest(new ErrorResponse("Validation failed", string.Join("; ", errors), errors));
 
-        var result = await service.WithdrawAsync(request, ct);
+        var result = await service.WithdrawAsync(request!, ct);
         return result is null
             ? Results.NotFound(new ErrorResponse("Account not found", "No account exists."))
             : Results.Json(result, statusCode: StatusCodes.Status201Created);
