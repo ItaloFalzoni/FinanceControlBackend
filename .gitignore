@@ -1,0 +1,63 @@
+## .NET / C# ##
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+TestResults/
+*.coverage
+*.coveragexml
+coverage-report/
+
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+## Build results ##
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]uild/
+[Bb]uilds/
+[Pp]ublish/
+
+## IDE ##
+.vs/
+.vscode/
+.idea/
+*.swp
+*~
+
+## OS ##
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+## Docker ##
+.docker/
+
+## Environment files ##
+.env
+
+
+## NuGet ##
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+!**/packages/repositories.config
+
+## Rider ##
+.idea/
+*.sln.iml

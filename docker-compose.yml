@@ -1,0 +1,48 @@
+services:
+  financecontrol-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: financecontrol-api
+    ports:
+      - "8080:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
+      - ASPNETCORE_HTTP_PORTS=8080
+      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=${POSTGRES_DB:?POSTGRES_DB must be set - copy .env.example to .env};Username=${POSTGRES_USER:?POSTGRES_USER must be set - copy .env.example to .env};Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set - copy .env.example to .env}
+      - Authentication__ApiKey=${API_KEY:?API_KEY must be set - copy .env.example to .env}
+      - OTEL_CONSOLE_EXPORTER=${OTEL_CONSOLE_EXPORTER:-false} # opt-in: true = traces/métricas no `docker compose logs`; default off para não poluir
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  postgres:
+    image: postgres:18.6
+    container_name: financecontrol-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB must be set - copy .env.example to .env}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER must be set - copy .env.example to .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set - copy .env.example to .env}
+    ports:
+      - "127.0.0.1:5432:5432" # dev-only: localhost bind; em produção remova a publicação
+    volumes:
+      # postgres:18+ stores data under /var/lib/postgresql/<major>/docker,
+      # so the volume mounts the parent directory (not the legacy /data path).
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
