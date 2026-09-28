@@ -6,15 +6,13 @@ WORKDIR /repo
 COPY FinanceControl.sln ./
 COPY src/FinanceControl.API/FinanceControl.API.csproj ./src/FinanceControl.API/
 COPY tests/FinanceControl.UnitTests/FinanceControl.UnitTests.csproj ./tests/FinanceControl.UnitTests/
-COPY tests/FinanceControl.IntegrationTests/FinanceControl.IntegrationTests.csproj ./tests/FinanceControl.IntegrationTests/
 
 RUN dotnet restore
 
 # Copy the full source
 COPY . .
 
-# Publish the API (tests run in CI/locally via `dotnet test` with
-# `docker compose up -d postgres` — never inside the image build).
+# Publish the API (tests run in CI/locally via `dotnet test` — never inside the image build).
 RUN dotnet publish src/FinanceControl.API/FinanceControl.API.csproj \
     --no-restore \
     --configuration Release \

@@ -83,12 +83,13 @@ Em ambiente de desenvolvimento (`ASPNETCORE_ENVIRONMENT=Development`), o contrat
 
 ### Testes
 
-Os dois projetos de teste existem, compilam e estão no `FinanceControl.sln` (`dotnet test` executa a suíte completa):
+Projeto único `FinanceControl.UnitTests` no `FinanceControl.sln` (`dotnet test` executa a suíte completa, sem banco e sem Docker):
 
-- **Unitários** (`FinanceControl.UnitTests`): entidades puras (`Account`, `Transaction`) + `RequestValidators`, sem banco e sem DI, com asserções nativas do xUnit (`Assert.*`).
-- **Integração** (`FinanceControl.IntegrationTests`): `FinanceControlWebAppFactory` sobe o pipeline real **contra um banco PostgreSQL descartável** (cria/dropa por factory; requer `docker compose up -d postgres`; veja [Como Testar](#como-testar)), cobrindo autenticação (`401` sem/chave errada, `200` com chave válida, `/health` público e OpenAPI anunciando o scheme), criação explícita (`201`, `409`, concorrência), fluxo das rotas (`201` no happy path, `400` validação com `Errors[]`, `422` saldo insuficiente/overflow), histórico paginado (`?page/?pageSize`, `400` em paginação inválida, `pageSize=200` e página além do total), contrato (`10.5` → `400`, `401` em withdraw/transactions, body ausente → `400`), legado N-contas (mais antiga vence), concorrência de saldo, rollback + `404` first-run, persistência entre restarts e health (liveness sem DB + readiness com DB) e fail-closed de startup (testes puros de `OptionsValidationException`).
+- **Domínio** (`Domain/AccountTests`, `Domain/TransactionTests`): regras de saldo, `Deposit`/`Withdraw`, saldo insuficiente, overflow `checked`, `SignedAmount`.
+- **Validadores** (`Validators/RequestValidatorsTests`): input (`amount`, `description`) → `400`.
+- **Fail-closed** (`StartupFailClosedTests`): `DatabaseOptions`/`ApiKeyOptions` vazios impedem o start via `OptionsValidationException` (puros, sem HTTP e sem banco).
 
-Padrões de nomenclatura, estrutura e isolamento: `agents/conventions.md`.
+Padrões de nomenclatura e estrutura: `agents/conventions.md`.
 
 ---
 
@@ -151,9 +152,8 @@ FinanceControl/
 │       └── Endpoints/
 │           └── AccountEndpoints.cs            # Minimal API route mapping
 │
-└── tests/                                    # Unitários (domínio/validadores) | Integração (auth+fluxo+paginação+concorrência+persistência+legado+contrato+health+fail-closed)
-    ├── FinanceControl.UnitTests/             #   Domain/, Validators/ — sem banco
-    └── FinanceControl.IntegrationTests/      #   HTTP, exige Postgres (factory + Endpoints/*.cs + StartupFailClosedTests)
+└── tests/
+    └── FinanceControl.UnitTests/             # Domain/, Validators/, StartupFailClosedTests — sem banco, sem Docker
 ```
 
 ---
@@ -161,7 +161,7 @@ FinanceControl/
 ## Pré-requisitos
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
-- [Docker](https://www.docker.com/) e Docker Compose — a aplicação **exige PostgreSQL 18** (subi-lo via Compose é o caminho padrão; também é pré-requisito dos **testes de integração**, que criam um banco descartável por teste)
+- [Docker](https://www.docker.com/) e Docker Compose — a aplicação **exige PostgreSQL 18** (subi-lo via Compose é o caminho padrão). Os testes **não** exigem banco nem Docker.
 
 ---
 
@@ -195,15 +195,15 @@ A API estará disponível em:
 - HTTP: `http://localhost:5000`
 - HTTPS: `https://localhost:5001`
 
-### 4. Acessar a documentação interativa
+### 4. Acessar o documento OpenAPI
 
-Abra no navegador: `https://localhost:5001/scalar/v1`
+Com `ASPNETCORE_ENVIRONMENT=Development`, abra no navegador: `https://localhost:5001/openapi/v1.json`
 
 ---
 
 ## Como Testar
 
-> A suíte de integração **exige Postgres no ar**: `docker compose up -d postgres` (credenciais default batem com o `.env.example`; para credenciais diferentes, aponte `POSTGRES_TEST_ADMIN_CONNECTION`). Os unitários rodam sem banco.
+> Sem banco, sem Docker: `dotnet test` roda a suíte completa em <1s.
 
 ### Executar todos os testes
 
@@ -211,23 +211,17 @@ Abra no navegador: `https://localhost:5001/scalar/v1`
 dotnet test
 ```
 
-### Apenas testes unitários
+### Apenas um arquivo/classe
 
 ```bash
-dotnet test tests/FinanceControl.UnitTests
-```
-
-### Apenas testes de integração
-
-```bash
-dotnet test tests/FinanceControl.IntegrationTests
+dotnet test --filter "FullyQualifiedName~AccountTests"
 ```
 
 ### Relatório de cobertura de código
 
-A cobertura usa **Coverlet** (`coverlet.collector`, já referenciado nos dois projetos de teste) para gerar o XML e o **ReportGenerator** para convertê-lo em relatório. Tudo local, sem pipeline.
+A cobertura usa **Coverlet** (`coverlet.collector`, já referenciado no projeto de teste) para gerar o XML e o **ReportGenerator** para convertê-lo em relatório. Tudo local, sem pipeline.
 
-**1. Rodar os testes com cobertura** (a integração exige Postgres no ar; `--results-directory` centraliza os XMLs numa pasta fixa):
+**1. Rodar os testes com cobertura** (`--results-directory` centraliza os XMLs numa pasta fixa):
 
 ```bash
 dotnet test --collect:"XPlat Code Coverage" --settings coverlet.runsettings --results-directory TestResults
@@ -460,3 +454,9 @@ Hoje a validação é manual (métodos estáticos em `Application/Validators/Req
 
 - Pipeline GitHub Actions com build, test e push da imagem Docker
 - Deploy automatizado (Railway, Azure App Service, AWS ECS, etc.)
+
+### Testes (evolução futura)
+
+Decisão atual: a suíte cobre domínio, validadores e fail-closed **sem banco** (`dotnet test`, <1s, sem Docker). Testes que exercitam o pipeline HTTP contra banco foram removidos por não se pagarem neste escopo (cada caso exigia `CREATE DATABASE + Migrate + DROP`, levando o run a minutos, além de Postgres no CI/local).
+
+Se a API ganhar concorrência real, múltiplas contas ou dinheiro de verdade, reintroduzir um projeto `FinanceControl.IntegrationTests` com `WebApplicationFactory<Program>` contra PostgreSQL descartável (banco por classe + `ResetDatabaseAsync` via `DELETE`, cenários lentos com `Trait Suite=Slow` fora do filtro de PR), cobrindo: `401` sem/chave errada, `201/409` de criação (incluindo corrida), fluxo `201/400/422`, paginação (`400` em `?page/?pageSize` inválidos), `10.5` → `400`, corrida de saques sob `SELECT ... FOR UPDATE` (`201 + 422`), `404` first-run, persistência entre restarts e `liveness/readiness` do health.

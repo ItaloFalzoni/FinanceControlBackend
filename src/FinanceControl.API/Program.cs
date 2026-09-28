@@ -200,5 +200,5 @@ static Npgsql.PostgresException? UnwrapPostgresException(Exception ex)
 
 app.Run();
 
-// Required for WebApplicationFactory in integration tests
+// Extension point for a future WebApplicationFactory (see README → Testes (evolução futura))
 public partial class Program { }

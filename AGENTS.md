@@ -6,7 +6,7 @@ Contexto para agentes de IA. **Leia este arquivo inteiro antes de qualquer taref
 
 - C# / **.NET 10**, Minimal API, **um único projeto** `src/FinanceControl.API` com 4 camadas separadas por pasta.
 - Persistência **obrigatória em PostgreSQL 18** (EF Core 10 + Npgsql; `docker compose up -d postgres`): sem banco acessível a API **não sobe** (fail-closed, migrações aplicam no startup) e não há fallback in-memory. Sem mensageria — não crie nenhuma sem pedido explícito.
-- Testes: `tests/FinanceControl.UnitTests` (`Domain/AccountTests`, `Domain/TransactionTests`, `Validators/RequestValidatorsTests`, sem banco); `tests/FinanceControl.IntegrationTests` (`Endpoints/AccountCreationTests` + `ApiKeyAuthTests` + `LedgerFlowTests` + `PaginationTests` + `ConcurrencyTests` + `PersistenceTests` + `SeedPersistenceTests` + `LegacyAccountTests` + `ContractTests` + `ServiceCoverageTests` + `HealthTests` + `StartupFailClosedTests`; HTTP exige Postgres, fail-closed puros não). Padrões: `agents/conventions.md`.
+- Testes: `tests/FinanceControl.UnitTests` (`Domain/`, `Validators/`, `StartupFailClosedTests` — sem banco, sem Docker, <1s). Padrões: `agents/conventions.md`. Testes HTTP contra banco foram removidos (ver `README.md` → *Testes (evolução futura)*).
 - Regra central: **saldo é sempre calculado** (`Σ SignedAmount`), nunca armazenado; mutação só via `Account.Deposit()` / `Account.Withdraw()`.
 - **Conta única**: criada explicitamente via `POST /api/accounts` (`201`, `409` se já existe; em banco legado a conta **mais antiga** vence). Rotas: `/api/accounts`, `/api/balance`, `/api/transactions`, `/api/deposit`, `/api/withdraw`.
 - **API Key obrigatória**: toda rota `/api/*` exige o header `X-Api-Key` e responde `401` sem ela (`ApiKeyMiddleware`; config `Authentication:ApiKey`, env `Authentication__ApiKey`, valor em `.env` → `API_KEY`; fail-closed no startup). `/health` e o documento OpenAPI ficam fora de `/api` e continuam públicos.
@@ -62,9 +62,8 @@ src/FinanceControl.API/
     Services/AccountService.cs      # Orquestrador dos casos de uso
     Validators/RequestValidators.cs # Validação de input manual (sem lib) → 400
   Endpoints/AccountEndpoints.cs     # Minimal API → Application
-tests/                              # Unitários | Integração (criação+auth+fluxo+paginação+concorrência+persistência+legado+contrato+health+fail-closed)
-  FinanceControl.UnitTests/         # Domain/, Validators/ — sem banco, sem DI
-  FinanceControl.IntegrationTests/  # HTTP — factory + Endpoints/*.cs + StartupFailClosedTests.cs; exige Postgres (exceto fail-closed)
+tests/                              # Suíte sem banco (Domain/ + Validators/ + fail-closed)
+  FinanceControl.UnitTests/         # Sem banco, sem DI, sem Docker
 ```
 
 **Dependências permitidas:** `Endpoints → Application → Domain ← Infrastructure`. Nunca inverta.
@@ -72,11 +71,10 @@ tests/                              # Unitários | Integração (criação+auth+
 ## Comandos
 
 ```bash
-docker compose up -d postgres           # Postgres 18 (exigido por run/testes locais)
+docker compose up -d postgres           # Postgres 18 (exigido para rodar a API; testes não usam banco)
 dotnet build FinanceControl.sln         # build rápido (0 erros esperados)
-dotnet test                             # build + suíte (unitários + integração — integração HTTP exige Postgres no ar)
-dotnet test tests/FinanceControl.UnitTests        # só unitários (sem banco)
-dotnet test tests/FinanceControl.IntegrationTests # só integração (exige Postgres)
+dotnet test                             # suíte completa, sem banco (<1s)
+dotnet test --filter "FullyQualifiedName~AccountTests"  # um arquivo/classe
 dotnet test --collect:"XPlat Code Coverage" --settings coverlet.runsettings --results-directory TestResults   # testes + XML de cobertura (coverlet)
 dotnet run --project src/FinanceControl.API       # sobe a API (localhost:5000; aplica migrações no startup)
 dotnet dotnet-ef migrations add <Nome> --project src/FinanceControl.API --output-dir Infrastructure/Persistence/Migrations  # nova migração
@@ -87,8 +85,8 @@ dotnet dotnet-ef migrations add <Nome> --project src/FinanceControl.API --output
 Execute **nesta ordem** antes de declarar a tarefa concluída:
 
 1. [ ] `dotnet build FinanceControl.sln` → **0 erros, 0 warnings novos**.
-2. [ ] `dotnet test` → **0 falhas** (unitários sem banco + integração — HTTP exige Postgres no ar, `docker compose up -d postgres`).
-3. [ ] Testes **adicionados/atualizados** para todo comportamento novo ou alterado (regra de domínio → unitário; rota/HTTP → integração). Exceção permitida: mudança puramente cosmética — declare isso no relato.
+2. [ ] `dotnet test` → **0 falhas** (sem banco, <1s).
+3. [ ] Testes **adicionados/atualizados** para todo comportamento novo ou alterado (regra de domínio/validador/fail-closed → unitário; HTTP contra banco só na evolução futura descrita no `README.md`). Exceção permitida: mudança puramente cosmética — declare isso no relato.
 4. [ ] Nenhum teste existente foi deletado ou enfraquecido para "passar" — remoção deliberada só com pedido explícito do usuário.
 5. [ ] Contrato HTTP inalterado (rotas, status codes, DTOs) — ou alteração pedida e comunicada.
 6. [ ] Conferido o checklist de dependências (G6): nada novo foi referenciado sem necessidade.

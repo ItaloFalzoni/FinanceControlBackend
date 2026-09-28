@@ -3,7 +3,7 @@ using FinanceControl.API.Infrastructure.Persistence;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
-namespace FinanceControl.IntegrationTests;
+namespace FinanceControl.UnitTests;
 
 /// <summary>
 /// Fail-closed startup contract (mirrors Program.cs): an empty connection
