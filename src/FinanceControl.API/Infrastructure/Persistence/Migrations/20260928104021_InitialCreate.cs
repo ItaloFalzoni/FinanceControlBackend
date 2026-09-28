@@ -16,7 +16,7 @@ namespace FinanceControl.API.Infrastructure.Persistence.Migrations
                 columns: table => new
                 {
                     id = table.Column<Guid>(type: "uuid", nullable: false),
-                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()")
                 },
                 constraints: table =>
                 {
@@ -32,7 +32,7 @@ namespace FinanceControl.API.Infrastructure.Persistence.Migrations
                     amount = table.Column<long>(type: "bigint", nullable: false),
                     type = table.Column<int>(type: "integer", nullable: false),
                     description = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
-                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()")
                 },
                 constraints: table =>
                 {
@@ -48,9 +48,9 @@ namespace FinanceControl.API.Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateIndex(
-                name: "IX_transactions_account_id",
+                name: "IX_transactions_account_history",
                 table: "transactions",
-                column: "account_id");
+                columns: new[] { "account_id", "created_at", "id" });
         }
 
         /// <inheritdoc />

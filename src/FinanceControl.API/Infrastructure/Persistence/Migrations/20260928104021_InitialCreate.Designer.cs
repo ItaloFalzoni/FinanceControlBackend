@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace FinanceControl.API.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(FinanceControlDbContext))]
-    [Migration("20260928000819_AddIdempotencyExpiry")]
-    partial class AddIdempotencyExpiry
+    [Migration("20260928104021_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -33,61 +33,14 @@ namespace FinanceControl.API.Infrastructure.Persistence.Migrations
                         .HasColumnName("id");
 
                     b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
 
                     b.HasKey("Id");
 
                     b.ToTable("accounts", (string)null);
-                });
-
-            modelBuilder.Entity("FinanceControl.API.Infrastructure.Persistence.Entities.IdempotencyKeyRow", b =>
-                {
-                    b.Property<string>("Key")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("key");
-
-                    b.Property<Guid>("AccountId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("account_id");
-
-                    b.Property<long>("Amount")
-                        .HasColumnType("bigint")
-                        .HasColumnName("amount");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasColumnName("description");
-
-                    b.Property<DateTimeOffset>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("expires_at");
-
-                    b.Property<Guid>("TransactionId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("transaction_id");
-
-                    b.Property<int>("Type")
-                        .HasColumnType("integer")
-                        .HasColumnName("type");
-
-                    b.HasKey("Key");
-
-                    b.HasIndex("AccountId");
-
-                    b.HasIndex("ExpiresAt");
-
-                    b.HasIndex("TransactionId")
-                        .IsUnique();
-
-                    b.ToTable("idempotency_keys", (string)null);
                 });
 
             modelBuilder.Entity("FinanceControl.API.Infrastructure.Persistence.Entities.TransactionRow", b =>
@@ -106,8 +59,10 @@ namespace FinanceControl.API.Infrastructure.Persistence.Migrations
                         .HasColumnName("amount");
 
                     b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
 
                     b.Property<string>("Description")
                         .IsRequired()
@@ -121,7 +76,8 @@ namespace FinanceControl.API.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AccountId");
+                    b.HasIndex("AccountId", "CreatedAt", "Id")
+                        .HasDatabaseName("IX_transactions_account_history");
 
                     b.ToTable("transactions", null, t =>
                         {
@@ -129,25 +85,6 @@ namespace FinanceControl.API.Infrastructure.Persistence.Migrations
 
                             t.HasCheckConstraint("ck_transactions_type_valid", "type IN (1, 2)");
                         });
-                });
-
-            modelBuilder.Entity("FinanceControl.API.Infrastructure.Persistence.Entities.IdempotencyKeyRow", b =>
-                {
-                    b.HasOne("FinanceControl.API.Infrastructure.Persistence.Entities.AccountRow", "Account")
-                        .WithMany()
-                        .HasForeignKey("AccountId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("FinanceControl.API.Infrastructure.Persistence.Entities.TransactionRow", "Transaction")
-                        .WithMany()
-                        .HasForeignKey("TransactionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Account");
-
-                    b.Navigation("Transaction");
                 });
 
             modelBuilder.Entity("FinanceControl.API.Infrastructure.Persistence.Entities.TransactionRow", b =>
