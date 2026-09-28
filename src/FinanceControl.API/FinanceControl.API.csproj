@@ -10,8 +10,10 @@
 
   <ItemGroup>
     <!-- Integration tests drive the persistence layer directly: scenarios the HTTP
-         API can never produce (e.g. a row violating a CHECK inside UpdateAsync). -->
+         API can never produce (e.g. a row violating a CHECK inside UpdateAsync).
+         Unit tests reach the internal Reconstitute factories (Unknown type). -->
     <InternalsVisibleTo Include="FinanceControl.IntegrationTests" />
+    <InternalsVisibleTo Include="FinanceControl.UnitTests" />
   </ItemGroup>
 
   <ItemGroup>

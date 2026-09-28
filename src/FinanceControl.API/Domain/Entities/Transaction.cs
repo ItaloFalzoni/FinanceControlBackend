@@ -24,6 +24,8 @@ public sealed class Transaction
     {
         if (amount <= 0)
             throw new InvalidAmountException(amount);
+        if (type != TransactionType.Credit && type != TransactionType.Debit)
+            throw new UnknownTransactionTypeException((int)type);
 
         Id = Guid.NewGuid();
         Amount = amount;
@@ -53,6 +55,8 @@ public sealed class Transaction
     {
         if (amount <= 0)
             throw new InvalidAmountException(amount);
+        if (type != TransactionType.Credit && type != TransactionType.Debit)
+            throw new UnknownTransactionTypeException((int)type);
 
         return new Transaction
         {
@@ -67,5 +71,10 @@ public sealed class Transaction
     /// <summary>
     /// Signed amount in cents: positive for credits, negative for debits.
     /// </summary>
-    public long SignedAmount => Type == TransactionType.Credit ? Amount : -Amount;
+    public long SignedAmount => Type switch
+    {
+        TransactionType.Credit => Amount,
+        TransactionType.Debit => -Amount,
+        _ => throw new UnknownTransactionTypeException((int)Type),
+    };
 }

@@ -1,16 +1,10 @@
 namespace FinanceControl.API.Domain.Exceptions;
 
-public sealed class InsufficientFundsException : DomainException
+public sealed class InsufficientFundsException(long currentBalanceCents, long requestedAmountCents) : DomainException($"Insufficient funds. Current balance: {currentBalanceCents} cents, requested amount: {requestedAmountCents} cents.")
 {
-    public InsufficientFundsException(long currentBalanceCents, long requestedAmountCents)
-        : base($"Insufficient funds. Current balance: {currentBalanceCents} cents, requested amount: {requestedAmountCents} cents.")
-    {
-        CurrentBalance = currentBalanceCents;
-        RequestedAmount = requestedAmountCents;
-    }
 
     /// <summary>Balance in cents at the time of the failure.</summary>
-    public long CurrentBalance { get; }
+    public long CurrentBalance { get; } = currentBalanceCents;
     /// <summary>Requested debit in cents.</summary>
-    public long RequestedAmount { get; }
+    public long RequestedAmount { get; } = requestedAmountCents;
 }

@@ -1,6 +1,5 @@
 namespace FinanceControl.API.Domain.Exceptions;
 
-public abstract class DomainException : Exception
+public abstract class DomainException(string message) : Exception(message)
 {
-    protected DomainException(string message) : base(message) { }
 }
