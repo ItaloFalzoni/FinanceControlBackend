@@ -83,13 +83,15 @@ Em ambiente de desenvolvimento (`ASPNETCORE_ENVIRONMENT=Development`), o contrat
 
 ### Testes
 
-Projeto único `FinanceControl.UnitTests` no `FinanceControl.sln` (`dotnet test` executa a suíte completa, sem banco e sem Docker):
+`dotnet test --filter 'Suite!=Slow'` roda o rápido sem banco (<1s). A prova de concorrência (`Suite=Slow`, ~54s) exige `docker compose up -d postgres`:
+
+Projeto `FinanceControl.UnitTests` (sem banco, sem Docker):
 
 - **Domínio** (`Domain/AccountTests`, `Domain/TransactionTests`): regras de saldo, `Deposit`/`Withdraw`, saldo insuficiente, overflow `checked`, `SignedAmount`.
 - **Validadores** (`Validators/RequestValidatorsTests`): input (`amount`, `description`) → `400`.
 - **Fail-closed** (`StartupFailClosedTests`): `DatabaseOptions`/`ApiKeyOptions` vazios impedem o start via `OptionsValidationException` (puros, sem HTTP e sem banco).
 
-Padrões de nomenclatura e estrutura: `agents/conventions.md`.
+Padrões de nomenclatura e estrutura: `agents/conventions.md`. Concorrência (`Endpoints/ConcurrencyTests`, `Suite=Slow`): 2 saques de 6000 com saldo 7000 ⇒ `201 + 422` e saldo 1000; 2 depósitos concorrentes ⇒ ambos `201`.
 
 ---
 
@@ -153,7 +155,8 @@ FinanceControl/
 │           └── AccountEndpoints.cs            # Minimal API route mapping
 │
 └── tests/
-    └── FinanceControl.UnitTests/             # Domain/, Validators/, StartupFailClosedTests — sem banco, sem Docker
+    ├── FinanceControl.UnitTests/             # sem banco, sem Docker
+    └── FinanceControl.IntegrationTests/Endpoints/ConcurrencyTests.cs  # Suite=Slow, exige Postgres
 ```
 
 ---
@@ -216,51 +219,6 @@ dotnet test
 ```bash
 dotnet test --filter "FullyQualifiedName~AccountTests"
 ```
-
-### Relatório de cobertura de código
-
-A cobertura usa **Coverlet** (`coverlet.collector`, já referenciado no projeto de teste) para gerar o XML e o **ReportGenerator** para convertê-lo em relatório. Tudo local, sem pipeline.
-
-**1. Rodar os testes com cobertura** (`--results-directory` centraliza os XMLs numa pasta fixa):
-
-```bash
-dotnet test --collect:"XPlat Code Coverage" --settings coverlet.runsettings --results-directory TestResults
-```
-
-(`coverlet.runsettings` exclui o código gerado pelo source generator do OpenAPI, que não é nosso para cobrir.)
-
-**2. Restaurar o ReportGenerator** (tool local via `dotnet-tools.json`; idempotente, funciona em qualquer terminal sem depender do PATH global):
-
-```bash
-dotnet tool restore
-```
-
-**3. Relatório em texto** — gera `Summary.txt` (resumo de cobertura por classe) e o exibe no terminal:
-
-```bash
-dotnet reportgenerator -reports:"TestResults/**/coverage.cobertura.xml" -targetdir:coverage-report -reporttypes:TextSummary
-Get-Content coverage-report/Summary.txt   # cmd: type coverage-report\Summary.txt | bash: cat coverage-report/Summary.txt
-```
-
-**4. Relatório em HTML** — gere na mesma pasta `coverage-report/`:
-
-```bash
-dotnet reportgenerator -reports:"TestResults/**/coverage.cobertura.xml" -targetdir:coverage-report -reporttypes:HtmlInline
-# abra coverage-report/index.html (navega por classe, cada página é autocontida)
-```
-
-Os dois relatórios num comando só:
-
-```bash
-dotnet reportgenerator -reports:"TestResults/**/coverage.cobertura.xml" -targetdir:coverage-report -reporttypes:"TextSummary;HtmlInline"
-Get-Content coverage-report/Summary.txt   # texto | coverage-report/index.html → HTML (cmd: type … | bash: cat …)
-```
-
-Variações úteis:
-
-- **Um arquivo HTML só** (sem drill-down por classe): troque o tipo para `-reporttypes:HtmlSummary` → gera `coverage-report/summary.html`. Não combine `HtmlSummary` com `HtmlInline` na mesma pasta (ambos escrevem `index.html`).
-
-> ⚠️ Os XMLs ficam em `TestResults/<guid>/` e se acumulam entre execuções. Como o ReportGenerator mescla **todos** os arquivos que o glob achar, um run antigo pode inflar a cobertura do atual — limpe antes de um run novo: `Remove-Item -Recurse TestResults` (bash: `rm -rf TestResults`). As pastas `TestResults/` e `coverage-report/` são ignoradas pelo git.
 
 ---
 
@@ -457,6 +415,6 @@ Hoje a validação é manual (métodos estáticos em `Application/Validators/Req
 
 ### Testes (evolução futura)
 
-Decisão atual: a suíte cobre domínio, validadores e fail-closed **sem banco** (`dotnet test`, <1s, sem Docker). Testes que exercitam o pipeline HTTP contra banco foram removidos por não se pagarem neste escopo (cada caso exigia `CREATE DATABASE + Migrate + DROP`, levando o run a minutos, além de Postgres no CI/local).
+Decisão atual: rápido sem banco (`--filter 'Suite!=Slow'`, <1s) + prova de concorrência restaurada (`ConcurrencyTests`, `Suite=Slow`, ~54s, exige `docker compose up -d postgres`; cada caso cria `DATABASE + Migrate + DROP`).
 
-Se a API ganhar concorrência real, múltiplas contas ou dinheiro de verdade, reintroduzir um projeto `FinanceControl.IntegrationTests` com `WebApplicationFactory<Program>` contra PostgreSQL descartável (banco por classe + `ResetDatabaseAsync` via `DELETE`, cenários lentos com `Trait Suite=Slow` fora do filtro de PR), cobrindo: `401` sem/chave errada, `201/409` de criação (incluindo corrida), fluxo `201/400/422`, paginação (`400` em `?page/?pageSize` inválidos), `10.5` → `400`, corrida de saques sob `SELECT ... FOR UPDATE` (`201 + 422`), `404` first-run, persistência entre restarts e `liveness/readiness` do health.
+Se a API ganhar múltiplas contas ou dinheiro de verdade, ampliar o `FinanceControl.IntegrationTests` (banco por classe + `ResetDatabaseAsync` via `DELETE`, resto com `Trait Suite=Slow`), cobrindo: `401` sem/chave errada, `201/409` de criação (incluindo corrida), fluxo `201/400/422`, paginação (`400` em `?page/?pageSize` inválidos), `10.5` → `400`, `404` first-run, persistência entre restarts e `liveness/readiness` do health. A corrida de saques (`201 + 422`) já está coberta.

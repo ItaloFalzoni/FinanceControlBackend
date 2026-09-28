@@ -6,7 +6,7 @@ Contexto para agentes de IA. **Leia este arquivo inteiro antes de qualquer taref
 
 - C# / **.NET 10**, Minimal API, **um único projeto** `src/FinanceControl.API` com 4 camadas separadas por pasta.
 - Persistência **obrigatória em PostgreSQL 18** (EF Core 10 + Npgsql; `docker compose up -d postgres`): sem banco acessível a API **não sobe** (fail-closed, migrações aplicam no startup) e não há fallback in-memory. Sem mensageria — não crie nenhuma sem pedido explícito.
-- Testes: `tests/FinanceControl.UnitTests` (`Domain/`, `Validators/`, `StartupFailClosedTests` — sem banco, sem Docker, <1s). Padrões: `agents/conventions.md`. Testes HTTP contra banco foram removidos (ver `README.md` → *Testes (evolução futura)*).
+- Testes: `tests/FinanceControl.UnitTests` (sem banco, <1s) + `tests/FinanceControl.IntegrationTests/Endpoints/ConcurrencyTests` (`Suite=Slow`, ~54s, exige `docker compose up -d postgres`). Padrões: `agents/conventions.md`. `dotnet test --filter 'Suite!=Slow'` roda só o rápido.
 - Regra central: **saldo é sempre calculado** (`Σ SignedAmount`), nunca armazenado; mutação só via `Account.Deposit()` / `Account.Withdraw()`.
 - **Conta única**: criada explicitamente via `POST /api/accounts` (`201`, `409` se já existe; em banco legado a conta **mais antiga** vence). Rotas: `/api/accounts`, `/api/balance`, `/api/transactions`, `/api/deposit`, `/api/withdraw`.
 - **API Key obrigatória**: toda rota `/api/*` exige o header `X-Api-Key` e responde `401` sem ela (`ApiKeyMiddleware`; config `Authentication:ApiKey`, env `Authentication__ApiKey`, valor em `.env` → `API_KEY`; fail-closed no startup). `/health` e o documento OpenAPI ficam fora de `/api` e continuam públicos.
@@ -75,7 +75,6 @@ docker compose up -d postgres           # Postgres 18 (exigido para rodar a API;
 dotnet build FinanceControl.sln         # build rápido (0 erros esperados)
 dotnet test                             # suíte completa, sem banco (<1s)
 dotnet test --filter "FullyQualifiedName~AccountTests"  # um arquivo/classe
-dotnet test --collect:"XPlat Code Coverage" --settings coverlet.runsettings --results-directory TestResults   # testes + XML de cobertura (coverlet)
 dotnet run --project src/FinanceControl.API       # sobe a API (localhost:5000; aplica migrações no startup)
 dotnet dotnet-ef migrations add <Nome> --project src/FinanceControl.API --output-dir Infrastructure/Persistence/Migrations  # nova migração
 ```

@@ -11,9 +11,6 @@
 [Ll]ogs/
 
 TestResults/
-*.coverage
-*.coveragexml
-coverage-report/
 
 project.lock.json
 project.fragment.lock.json

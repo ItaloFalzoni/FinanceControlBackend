@@ -16,7 +16,7 @@ Carregue ao escrever ou editar C# (`src/` ou `tests/`). Siga o estilo do arquivo
 
 ## Testes
 
-> **Status:** `tests/FinanceControl.UnitTests` (`Domain/`, `Validators/`, `StartupFailClosedTests` — sem banco, sem Docker). Testes HTTP contra banco foram removidos (ver `README.md` → *Testes (evolução futura)*).
+> **Status:** `tests/FinanceControl.UnitTests` (sem banco) + `tests/FinanceControl.IntegrationTests/Endpoints/ConcurrencyTests` (`Suite=Slow`, exige Postgres; fora do filtro rápido).
 
 - **Padrão de nome:** `Metodo_Condição_Resultado` — ex.: `Withdraw_WithInsufficientFunds_ThrowsInsufficientFundsException`.
 - **Unitários** (`tests/FinanceControl.UnitTests/`): entidades puras sem mock e sem DI (`Domain/`), validadores (`Validators/`) e fail-closed de `DatabaseOptions`/`ApiKeyOptions` (`StartupFailClosedTests`, puro via `ServiceCollection`, sem HTTP e sem banco). **`Assert` nativo do xUnit** (sem lib de asserção): `Assert.Throws<T>(act)` para exceções (tipos exatos — as do domínio são `sealed`/lançadas diretamente), `Assert.Single(c)` para coleção com 1 item, `Assert.Equal` com literal `L` em `long` de centavos (ex.: `Assert.Equal(0L, account.Balance)`, senão falha a inferência de tipo) e `Assert.InRange` para janelas de tempo (`BeCloseTo`). Somas usam `checked` — estouro lança `OverflowException` (coberto em `AccountTests`).
