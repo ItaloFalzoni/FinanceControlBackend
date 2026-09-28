@@ -26,8 +26,6 @@ Log.Logger = new LoggerConfiguration()
 var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseSerilog();
 
-// ── Services ─────────────────────────────────────────────────────────────────
-
 // OpenAPI document behind the Scalar reference UI. The transformer advertises
 // the X-Api-Key scheme so callers know every /api/* operation needs it.
 builder.Services.AddOpenApi(options =>
@@ -36,7 +34,7 @@ builder.Services.AddOpenApi(options =>
 // Health checks: /health is liveness-only (no dependencies — the container
 // healthcheck and orchestrators use it); /health/ready includes PostgreSQL.
 builder.Services.AddHealthChecks()
-    .AddDbContextCheck<FinanceControlDbContext>("postgres");
+    .AddDbContextCheck<FinanceControlDbContext>("postgres", tags: ["ready"]);
 
 // API key (fail-closed): the host never starts without a key — same policy as
 // the connection string. Config key Authentication:ApiKey, environment variable
@@ -91,13 +89,22 @@ if (Environment.GetEnvironmentVariable("OTEL_CONSOLE_EXPORTER") == "true")
         .WithMetrics(metrics => metrics.AddConsoleExporter());
 }
 
-// ── Build ─────────────────────────────────────────────────────────────────────
-
 var app = builder.Build();
 
-app.UseSerilogRequestLogging();
+// Reject known weak API keys outside Development: fail-closed must also cover
+// "key configured but still the dev default". Tests inject their own key via
+// FinanceControlWebAppFactory, so this only fires on real hosts.
+{
+    var configuredKey = app.Services.GetRequiredService<IOptions<ApiKeyOptions>>().Value.ApiKey;
+    var isWeakDefault = configuredKey is "dev-local-api-key-change-me" or "change-me" or "integration-test-api-key";
+    if (!app.Environment.IsDevelopment() && (isWeakDefault || configuredKey.Length < 32))
+    {
+        Log.Fatal("Refusing to start: Authentication:ApiKey is a weak/default value. Set a long random Authentication__ApiKey in Production.");
+        throw new InvalidOperationException("Authentication:ApiKey must be a long random value in Production (set the Authentication__ApiKey environment variable).");
+    }
+}
 
-// ── Startup checks (fail-closed) ─────────────────────────────────────────────
+app.UseSerilogRequestLogging();
 
 // Apply pending migrations. The application depends on PostgreSQL: if the
 // database is unreachable, the host does not start — there is no fallback.
@@ -112,40 +119,78 @@ using (var scope = app.Services.CreateScope())
     dbContext.Database.Migrate();
 }
 
-// ── Global Exception Handler ──────────────────────────────────────────────────
-
 app.Use(async (context, next) =>
 {
     try
     {
         await next(context);
     }
+    catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+    {
+        throw;
+    }
+    catch (AccountNotFoundException ex)
+    {
+        if (context.Response.HasStarted) throw;
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
+        context.Response.ContentType = "application/json";
+        await context.Response.WriteAsJsonAsync(new ErrorResponse("Account not found", ex.Message, [ex.Message]));
+    }
+    catch (BadHttpRequestException ex)
+    {
+        if (context.Response.HasStarted) throw;
+        var message = "Invalid request body.";
+        context.Response.StatusCode = StatusCodes.Status400BadRequest;
+        context.Response.ContentType = "application/json";
+        await context.Response.WriteAsJsonAsync(new ErrorResponse("Validation failed", message, [message, ex.Message]));
+    }
+    catch (System.Text.Json.JsonException ex)
+    {
+        if (context.Response.HasStarted) throw;
+        var message = "Invalid request body.";
+        context.Response.StatusCode = StatusCodes.Status400BadRequest;
+        context.Response.ContentType = "application/json";
+        await context.Response.WriteAsJsonAsync(new ErrorResponse("Validation failed", message, [message, ex.Message]));
+    }
     catch (OverflowException)
     {
+        if (context.Response.HasStarted) throw;
         context.Response.StatusCode = StatusCodes.Status422UnprocessableEntity;
         context.Response.ContentType = "application/json";
         await context.Response.WriteAsJsonAsync(new ErrorResponse("Domain error", "Arithmetic overflow: amount too large.", ["Arithmetic overflow: amount too large."]));
     }
     catch (Npgsql.PostgresException ex) when (ex.SqlState == "22003")
     {
+        if (context.Response.HasStarted) throw;
+        context.Response.StatusCode = StatusCodes.Status422UnprocessableEntity;
+        context.Response.ContentType = "application/json";
+        await context.Response.WriteAsJsonAsync(new ErrorResponse("Domain error", "Arithmetic overflow: amount too large.", ["Arithmetic overflow: amount too large."]));
+    }
+    catch (DbUpdateException ex) when (UnwrapPostgresException(ex) is { SqlState: "22003" })
+    {
+        if (context.Response.HasStarted) throw;
         context.Response.StatusCode = StatusCodes.Status422UnprocessableEntity;
         context.Response.ContentType = "application/json";
         await context.Response.WriteAsJsonAsync(new ErrorResponse("Domain error", "Arithmetic overflow: amount too large.", ["Arithmetic overflow: amount too large."]));
     }
     catch (InsufficientFundsException ex)
     {
+        if (context.Response.HasStarted) throw;
         context.Response.StatusCode = StatusCodes.Status422UnprocessableEntity;
         context.Response.ContentType = "application/json";
         await context.Response.WriteAsJsonAsync(new ErrorResponse("Insufficient funds", ex.Message, [ex.Message]));
     }
     catch (DomainException ex)
     {
+        if (context.Response.HasStarted) throw;
         context.Response.StatusCode = StatusCodes.Status422UnprocessableEntity;
         context.Response.ContentType = "application/json";
         await context.Response.WriteAsJsonAsync(new ErrorResponse("Domain error", ex.Message, [ex.Message]));
     }
     catch (Exception ex)
     {
+        if (context.Response.HasStarted) throw;
+        Log.Error(ex, "Unhandled request {Method} {Path}", context.Request.Method, context.Request.Path);
         context.Response.StatusCode = StatusCodes.Status500InternalServerError;
         context.Response.ContentType = "application/json";
         await context.Response.WriteAsJsonAsync(
@@ -153,8 +198,6 @@ app.Use(async (context, next) =>
                 app.Environment.IsDevelopment() ? ex.Message : null));
     }
 });
-
-// ── Middleware ────────────────────────────────────────────────────────────────
 
 if (app.Environment.IsDevelopment())
 {
@@ -174,16 +217,25 @@ if (app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
 }
 
-// ── API Key Authentication ───────────────────────────────────────────────────
 // Every /api/* request must carry the X-Api-Key header: anything else is
 // answered 401 before reaching the endpoints. See ApiKeyMiddleware.
 app.UseApiKeyAuthentication();
 
-// ── Endpoints ─────────────────────────────────────────────────────────────────
-
 app.MapHealthChecks("/health");
-app.MapHealthChecks("/health/ready");
+app.MapHealthChecks("/health/ready", new() { Predicate = check => check.Tags.Contains("ready") });
 app.MapAccountEndpoints();
+
+static Npgsql.PostgresException? UnwrapPostgresException(Exception ex)
+{
+    var current = ex.InnerException;
+    while (current is not null)
+    {
+        if (current is Npgsql.PostgresException postgres)
+            return postgres;
+        current = current.InnerException;
+    }
+    return null;
+}
 
 app.Run();
 
