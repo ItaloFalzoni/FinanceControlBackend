@@ -30,4 +30,4 @@ jobs:
         with:
           dotnet-version: 10.0.x
       - run: dotnet build FinanceControl.sln --nologo
-      - run: dotnet test --no-build --collect:"XPlat Code Coverage" --nologo
+      - run: dotnet test --no-build --collect:"XPlat Code Coverage" --settings coverlet.runsettings --nologo

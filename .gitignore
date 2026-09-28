@@ -48,7 +48,8 @@ Desktop.ini
 .docker/
 
 ## Environment files ##
-.env
+.env*
+!.env.example
 
 
 ## NuGet ##
