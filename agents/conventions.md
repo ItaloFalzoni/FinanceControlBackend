@@ -16,7 +16,7 @@ Carregue ao escrever ou editar C# (`src/` ou `tests/`). Siga o estilo do arquivo
 
 ## Testes
 
-> **Status:** `tests/FinanceControl.UnitTests` (`Domain/`, `Validators/`, sem banco); `tests/FinanceControl.IntegrationTests` (criação + auth + fluxo + concorrência + persistência + seed + health + fail-closed). As regras abaixo descrevem o padrão seguido.
+> **Status:** `tests/FinanceControl.UnitTests` (`Domain/`, `Validators/`, sem banco); `tests/FinanceControl.IntegrationTests` (criação + auth + fluxo + paginação + concorrência + persistência + seed + legado + contrato + cobertura + health + fail-closed). As regras abaixo descrevem o padrão seguido.
 
 - **Padrão de nome:** `Metodo_Condição_Resultado` — ex.: `Withdraw_WithInsufficientFunds_ShouldThrowInsufficientFundsException` (unitários) / `Withdraw_WithInsufficientFunds_Returns422AndKeepsBalance` (integração).
 - **Unitários** (`tests/FinanceControl.UnitTests/Domain/`): testam entidades puras, sem mock e sem DI. **`Assert` nativo do xUnit** (sem lib de asserção): `Assert.Throws<T>(act)` para exceções (tipos exatos — as do domínio são `sealed`/lançadas diretamente), `Assert.Single(c)` para coleção com 1 item, `Assert.Equal` com literal `L` em `long` de centavos (ex.: `Assert.Equal(0L, account.Balance)`, senão falha a inferência de tipo) e `Assert.InRange` para janelas de tempo (`BeCloseTo`). Somas usam `checked` — estouro lança `OverflowException` (coberto em `AccountTests`).

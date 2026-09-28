@@ -20,8 +20,10 @@ Decisões de mapeamento de erro (não reproduzir de memória — conferir `Progr
 | Situação | Status | Onde é decidido |
 |---|---|---|
 | Validação de input inválida | 400 | handler do endpoint (com `Errors[]`; `Detail` = join legado) |
+| Corpo malformado / `10.5` em `long` | 400 | middleware global (`BadHttpRequestException`/`JsonException` → `Validation failed`) |
 | `?page/?pageSize` inválidos | 400 | handler do endpoint |
 | Conta inexistente no banco | 404 | endpoint (retorna `null` do service) — first-run: só some após `POST /api/accounts` |
+| Conta removida entre leitura e escrita | 404 | middleware global (`AccountNotFoundException`) + service traduz para `null` → mesmo shape do endpoint |
 | Conta já existe na criação | 409 | endpoint de criação (`CreateSingleAsync` retornou `Created: false`) |
 | `InsufficientFundsException` | 422 | middleware global (`Insufficient funds`) — vale para withdraw via service e para a revalidação em `UpdateAsync` |
 | `OverflowException` (saldo estouraria `long`) | 422 | middleware global |

@@ -25,7 +25,7 @@
     linhas — banco existente deve ser recriado (`docker compose down -v`).
 - Operações com `long` em memória: somas de saldo (`Account.Balance`,
   `PostgresAccountRepository.UpdateAsync`) rodam em bloco `checked` — estouro
-  lança `OverflowException` (vira `500` no handler global) em vez de wrap
+  lança `OverflowException` (vira `422` no handler global) em vez de wrap
   silencioso. Sem teto artificial de domínio (decisão registrada); teste em
   `AccountTests.Balance_Overflow_ThrowsOverflowException`.
 - Alternativas rejeitadas: manter `numeric(19,2)`/`decimal` (precisão ok, mas

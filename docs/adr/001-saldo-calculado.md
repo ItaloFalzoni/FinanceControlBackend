@@ -8,7 +8,8 @@
   (`bigint` de centavos só em `transactions.amount`, ver ADR-004). Escrita = append de transação; leitura = `SUM`.
 - Consequências:
   - (+) Impossível divergir saldo x extrato (sem dual-write); auditoria natural.
-  - (−) Leitura O(n) por conta; extrato full agrava (decisão D3: paginação adiada).
+  - (−) Leitura O(n) por conta; extrato full agrava (paginação implementada em
+    `GET /api/transactions?page=&pageSize=`, ver `PostgresAccountRepository.GetHistoryPageAsync`).
 - Alternativas rejeitadas: coluna materializada + trigger/`CHECK(balance >= 0)` (acopla banco à
   regra, reintroduz drift); snapshot mensal (complexidade sem volume que justifique).
 - Revisitar quando: extrato > 100k linhas/conta ou leitura p95 estourar SLO.

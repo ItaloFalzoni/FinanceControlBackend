@@ -73,9 +73,9 @@ Validações de entrada (campos obrigatórios, limites de tamanho, valores posit
 
 A API exige **API key** em toda rota `/api/*`: o `ApiKeyMiddleware` compara o header **`X-Api-Key`** com a configuração `Authentication:ApiKey` (env `Authentication__ApiKey`, valor no `.env` → `API_KEY`) e responde **`401`** antes de chegar aos handlers. A chave é validada no startup (fail-closed: sem ela o host não sobe) e comparada em tempo constante. `/health`, `/health/ready`, OpenAPI e Scalar ficam fora de `/api` e continuam públicos (o healthcheck do container depende disso).
 
-A chave é **fixa e compartilhada** — aceitável para desafio técnico/testes, mas não para produção (sem identidade, escopo ou expiração). Detalhes e evolução em [`docs/api-key.md`](docs/api-key.md).
+A chave é **fixa e compartilhada**. Detalhes e evolução em [`docs/api-key.md`](docs/api-key.md).
 
-A chave pertence a quem **chama** a API e existe só no servidor do cliente — no front-end ela é injetada pelo proxy `app/api/*` e nunca chega ao browser. Para expor o serviço fora da rede local/privada, além da chave, proteja a camada de transporte (gateway, rede interna, mTLS) ou evolua para autenticação por usuário — ver [Melhorias Futuras](#melhorias-futuras).
+A chave pertence a quem **chama** a API e existe só no servidor do cliente. No front-end ela é injetada pelo proxy `app/api/*` e nunca chega ao browser. Para expor o serviço fora da rede local/privada, além da chave, proteja a camada de transporte (gateway, rede interna, mTLS) ou evolua para autenticação por usuário. Ver [Melhorias Futuras](#melhorias-futuras).
 
 ### Documentação: OpenAPI via Scalar
 
@@ -86,7 +86,7 @@ Em ambiente de desenvolvimento (`ASPNETCORE_ENVIRONMENT=Development`), a documen
 Os dois projetos de teste existem, compilam e estão no `FinanceControl.sln` (`dotnet test` executa a suíte completa):
 
 - **Unitários** (`FinanceControl.UnitTests`): entidades puras (`Account`, `Transaction`) + `RequestValidators`, sem banco e sem DI, com asserções nativas do xUnit (`Assert.*`).
-- **Integração** (`FinanceControl.IntegrationTests`): `FinanceControlWebAppFactory` sobe o pipeline real **contra um banco PostgreSQL descartável** (cria/dropa por factory; requer `docker compose up -d postgres`; veja [Como Testar](#como-testar)), cobrindo autenticação (`401` sem/chave errada, `200` com chave válida, `/health` público e OpenAPI anunciando o scheme), criação explícita (`201`, `409`, concorrência), fluxo das rotas (`201` no happy path, `400` validação com `Errors[]`, `422` saldo insuficiente/overflow), histórico paginado (`?page/?pageSize`, `400` em paginação inválida), concorrência de saldo, rollback + `404` first-run, persistência entre restarts e health (liveness + readiness) e fail-closed de startup (testes puros de `OptionsValidationException`).
+- **Integração** (`FinanceControl.IntegrationTests`): `FinanceControlWebAppFactory` sobe o pipeline real **contra um banco PostgreSQL descartável** (cria/dropa por factory; requer `docker compose up -d postgres`; veja [Como Testar](#como-testar)), cobrindo autenticação (`401` sem/chave errada, `200` com chave válida, `/health` público e OpenAPI anunciando o scheme), criação explícita (`201`, `409`, concorrência), fluxo das rotas (`201` no happy path, `400` validação com `Errors[]`, `422` saldo insuficiente/overflow), histórico paginado (`?page/?pageSize`, `400` em paginação inválida, `pageSize=200` e página além do total), contrato (`10.5` → `400`, `401` em withdraw/transactions, body ausente → `400`), legado N-contas (mais antiga vence), concorrência de saldo, rollback + `404` first-run, persistência entre restarts e health (liveness sem DB + readiness com DB) e fail-closed de startup (testes puros de `OptionsValidationException`).
 
 Padrões de nomenclatura, estrutura e isolamento: `agents/conventions.md`.
 
@@ -115,17 +115,23 @@ FinanceControl/
 │       ├── Domain/
 │       │   ├── Entities/
 │       │   │   ├── Account.cs                 # Aggregate root com regras de negócio
-│       │   │   └── Transaction.cs             # Value object imutável
+│       │   │   └── Transaction.cs             # Imutável; factories CreateCredit/CreateDebit
 │       │   ├── Enums/
-│       │   │   └── TransactionType.cs
+│       │   │   └── TransactionType.cs         # Unknown | Credit | Debit
 │       │   ├── Exceptions/
 │       │   │   ├── DomainException.cs         # Base abstrata
 │       │   │   ├── InsufficientFundsException.cs
-│       │   │   └── InvalidAmountException.cs
+│       │   │   ├── InvalidAmountException.cs
+│       │   │   ├── AccountNotFoundException.cs # Conta removida entre leitura e escrita → 404
+│       │   │   └── UnknownTransactionTypeException.cs # Type 0/corrompido → 422
 │       │   └── Repositories/
 │       │       └── IAccountRepository.cs
 │       │
 │       ├── Infrastructure/
+│       │   ├── Authentication/
+│       │   │   ├── ApiKeyMiddleware.cs        # X-Api-Key em /api/*, 401, comparação constant-time
+│       │   │   ├── ApiKeyOptions.cs           # Authentication:ApiKey (fail-closed)
+│       │   │   └── ApiKeySecuritySchemeTransformer.cs # Anuncia ApiKey no OpenAPI
 │       │   ├── Persistence/
 │       │   │   ├── DatabaseOptions.cs           # Config ConnectionStrings:Postgres
 │       │   │   ├── FinanceControlDbContext.cs   # Modelo EF (schema snake_case + CHECKs)
@@ -139,13 +145,15 @@ FinanceControl/
 │       │   ├── Dtos.cs                        # Records de request/response
 │       │   ├── Services/
 │       │   │   └── AccountService.cs          # Orquestrador dos casos de uso
+│       │   ├── Telemetry/
+│       │   │   └── AccountTelemetry.cs        # ActivitySource + Meter FinanceControl.Account
 │       │   └── Validators/
 │       │       └── RequestValidators.cs       # Validação de entrada (sem lib)
 │       │
 │       └── Endpoints/
 │           └── AccountEndpoints.cs            # Minimal API route mapping
 │
-└── tests/                                    # Unitários (domínio/validadores) | Integração (auth+fluxo+concorrência+persistência+health+fail-closed)
+└── tests/                                    # Unitários (domínio/validadores) | Integração (auth+fluxo+paginação+concorrência+persistência+legado+contrato+health+fail-closed)
     ├── FinanceControl.UnitTests/             #   Domain/, Validators/ — sem banco
     └── FinanceControl.IntegrationTests/      #   HTTP, exige Postgres (factory + Endpoints/*.cs + StartupFailClosedTests)
 ```
@@ -224,34 +232,36 @@ A cobertura usa **Coverlet** (`coverlet.collector`, já referenciado nos dois pr
 **1. Rodar os testes com cobertura** (a integração exige Postgres no ar; `--results-directory` centraliza os XMLs numa pasta fixa):
 
 ```bash
-dotnet test --collect:"XPlat Code Coverage" --results-directory TestResults
+dotnet test --collect:"XPlat Code Coverage" --settings coverlet.runsettings --results-directory TestResults
 ```
 
-**2. Instalar o ReportGenerator** (uma única vez):
+(`coverlet.runsettings` exclui o código gerado pelo source generator do OpenAPI, que não é nosso para cobrir.)
+
+**2. Restaurar o ReportGenerator** (tool local via `dotnet-tools.json`; idempotente, funciona em qualquer terminal sem depender do PATH global):
 
 ```bash
-dotnet tool install -g dotnet-reportgenerator-globaltool
+dotnet tool restore
 ```
 
 **3. Relatório em texto** — gera `Summary.txt` (resumo de cobertura por classe) e o exibe no terminal:
 
 ```bash
-reportgenerator -reports:"TestResults/**/coverage.cobertura.xml" -targetdir:coverage-report -reporttypes:TextSummary
-cat coverage-report/Summary.txt        # PowerShell: Get-Content coverage-report/Summary.txt
+dotnet reportgenerator -reports:"TestResults/**/coverage.cobertura.xml" -targetdir:coverage-report -reporttypes:TextSummary
+Get-Content coverage-report/Summary.txt   # cmd: type coverage-report\Summary.txt | bash: cat coverage-report/Summary.txt
 ```
 
 **4. Relatório em HTML** — gere na mesma pasta `coverage-report/`:
 
 ```bash
-reportgenerator -reports:"TestResults/**/coverage.cobertura.xml" -targetdir:coverage-report -reporttypes:HtmlInline
+dotnet reportgenerator -reports:"TestResults/**/coverage.cobertura.xml" -targetdir:coverage-report -reporttypes:HtmlInline
 # abra coverage-report/index.html (navega por classe, cada página é autocontida)
 ```
 
 Os dois relatórios num comando só:
 
 ```bash
-reportgenerator -reports:"TestResults/**/coverage.cobertura.xml" -targetdir:coverage-report -reporttypes:"TextSummary;HtmlInline"
-cat coverage-report/Summary.txt        # texto | coverage-report/index.html → HTML
+dotnet reportgenerator -reports:"TestResults/**/coverage.cobertura.xml" -targetdir:coverage-report -reporttypes:"TextSummary;HtmlInline"
+Get-Content coverage-report/Summary.txt   # texto | coverage-report/index.html → HTML (cmd: type … | bash: cat …)
 ```
 
 Variações úteis:

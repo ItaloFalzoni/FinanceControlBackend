@@ -1,6 +1,6 @@
-# ADR-003 — Conta única com criação explícita (supersede seed no startup)
+# ADR-003 — Conta única com criação explícita (aceito; supersede seed no startup)
 
-- Status: superseded (seed removido; criação via `POST /api/accounts`)
+- Status: aceito (supersede seed removido; criação via `POST /api/accounts`)
 - Contexto: só movimentação, saldo e histórico de "uma conta empresarial". O
   front precisa de um first-run explícito (tela "Começar") em vez de deploy
   populando a tabela.

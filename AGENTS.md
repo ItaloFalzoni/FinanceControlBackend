@@ -6,7 +6,7 @@ Contexto para agentes de IA. **Leia este arquivo inteiro antes de qualquer taref
 
 - C# / **.NET 10**, Minimal API, **um único projeto** `src/FinanceControl.API` com 4 camadas separadas por pasta.
 - Persistência **obrigatória em PostgreSQL 18** (EF Core 10 + Npgsql; `docker compose up -d postgres`): sem banco acessível a API **não sobe** (fail-closed, migrações aplicam no startup) e não há fallback in-memory. Sem mensageria — não crie nenhuma sem pedido explícito.
-- Testes: `tests/FinanceControl.UnitTests` (`Domain/AccountTests`, `Domain/TransactionTests`, `Validators/RequestValidatorsTests`, sem banco); `tests/FinanceControl.IntegrationTests` (`Endpoints/AccountCreationTests` + `ApiKeyAuthTests` + `LedgerFlowTests` + `ConcurrencyTests` + `PersistenceTests` + `SeedPersistenceTests` + `HealthTests` + `StartupFailClosedTests`; HTTP exige Postgres, fail-closed puros não). Padrões: `agents/conventions.md`.
+- Testes: `tests/FinanceControl.UnitTests` (`Domain/AccountTests`, `Domain/TransactionTests`, `Validators/RequestValidatorsTests`, sem banco); `tests/FinanceControl.IntegrationTests` (`Endpoints/AccountCreationTests` + `ApiKeyAuthTests` + `LedgerFlowTests` + `PaginationTests` + `ConcurrencyTests` + `PersistenceTests` + `SeedPersistenceTests` + `LegacyAccountTests` + `ContractTests` + `ServiceCoverageTests` + `HealthTests` + `StartupFailClosedTests`; HTTP exige Postgres, fail-closed puros não). Padrões: `agents/conventions.md`.
 - Regra central: **saldo é sempre calculado** (`Σ SignedAmount`), nunca armazenado; mutação só via `Account.Deposit()` / `Account.Withdraw()`.
 - **Conta única**: criada explicitamente via `POST /api/accounts` (`201`, `409` se já existe; em banco legado a conta **mais antiga** vence). Rotas: `/api/accounts`, `/api/balance`, `/api/transactions`, `/api/deposit`, `/api/withdraw`.
 - **API Key obrigatória**: toda rota `/api/*` exige o header `X-Api-Key` e responde `401` sem ela (`ApiKeyMiddleware`; config `Authentication:ApiKey`, env `Authentication__ApiKey`, valor em `.env` → `API_KEY`; fail-closed no startup). `/health`, OpenAPI e Scalar ficam fora de `/api` e continuam públicos.
@@ -46,7 +46,7 @@ src/FinanceControl.API/
     Entities/Account.cs       # Aggregate root — regras de saldo
     Entities/Transaction.cs   # Imutável; factories CreateCredit/CreateDebit
     Enums/TransactionType.cs  # Credit | Debit
-    Exceptions/               # DomainException (base) → InvalidAmount / InsufficientFunds
+    Exceptions/               # DomainException (base) → InvalidAmount / InsufficientFunds / AccountNotFound / UnknownType
     Repositories/IAccountRepository.cs
   Infrastructure/
     Persistence/                         # EF Core (→ Domain apenas)
@@ -63,7 +63,7 @@ src/FinanceControl.API/
     Telemetry/AccountTelemetry.cs   # ActivitySource + Meter FinanceControl.Account
     Validators/RequestValidators.cs # Validação de input manual (sem lib) → 400
   Endpoints/AccountEndpoints.cs     # Minimal API → Application
-tests/                              # Unitários | Integração (criação+auth+fluxo+paginação+concorrência+persistência+health+fail-closed)
+tests/                              # Unitários | Integração (criação+auth+fluxo+paginação+concorrência+persistência+legado+contrato+health+fail-closed)
   FinanceControl.UnitTests/         # Domain/, Validators/ — sem banco, sem DI
   FinanceControl.IntegrationTests/  # HTTP — factory + Endpoints/*.cs + StartupFailClosedTests.cs; exige Postgres (exceto fail-closed)
 ```
@@ -78,7 +78,7 @@ dotnet build FinanceControl.sln         # build rápido (0 erros esperados)
 dotnet test                             # build + suíte (unitários + integração — integração HTTP exige Postgres no ar)
 dotnet test tests/FinanceControl.UnitTests        # só unitários (sem banco)
 dotnet test tests/FinanceControl.IntegrationTests # só integração (exige Postgres)
-dotnet test --collect:"XPlat Code Coverage" --results-directory TestResults   # testes + XML de cobertura (coverlet)
+dotnet test --collect:"XPlat Code Coverage" --settings coverlet.runsettings --results-directory TestResults   # testes + XML de cobertura (coverlet)
 dotnet run --project src/FinanceControl.API       # sobe a API (localhost:5000; aplica migrações no startup)
 dotnet dotnet-ef migrations add <Nome> --project src/FinanceControl.API --output-dir Infrastructure/Persistence/Migrations  # nova migração
 ```
