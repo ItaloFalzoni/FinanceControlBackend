@@ -1,7 +1,5 @@
 using FinanceControl.API.Application;
 using FinanceControl.API.Application.Services;
-using FinanceControl.API.Application.Telemetry;
-using FinanceControl.API.Domain.Entities;
 using FinanceControl.API.Domain.Exceptions;
 using FinanceControl.API.Domain.Repositories;
 using FinanceControl.API.Endpoints;
@@ -10,23 +8,11 @@ using FinanceControl.API.Infrastructure.Persistence;
 using FinanceControl.API.Infrastructure.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using OpenTelemetry.Metrics;
-using OpenTelemetry.Trace;
-using Scalar.AspNetCore;
-using Serilog;
-using Serilog.Formatting.Compact;
 using ApiKeyOptions = FinanceControl.API.Infrastructure.Authentication.ApiKeyOptions;
 
-// Structured JSON logs to stdout (no external sink — collect via Docker/OTel).
-Log.Logger = new LoggerConfiguration()
-    .Enrich.FromLogContext()
-    .WriteTo.Console(new CompactJsonFormatter())
-    .CreateLogger();
-
 var builder = WebApplication.CreateBuilder(args);
-builder.Host.UseSerilog();
 
-// OpenAPI document behind the Scalar reference UI. The transformer advertises
+// OpenAPI document (machine-readable contract at /openapi/v1.json in Development). The transformer advertises
 // the X-Api-Key scheme so callers know every /api/* operation needs it.
 builder.Services.AddOpenApi(options =>
     options.AddDocumentTransformer<ApiKeySecuritySchemeTransformer>());
@@ -71,24 +57,6 @@ builder.Services.AddScoped<IAccountResolver>(sp => sp.GetRequiredService<Postgre
 // Application service
 builder.Services.AddScoped<AccountService>();
 
-// OpenTelemetry: ASP.NET spans + FinanceControl.Account source/meter. Console
-// exporter is opt-in (OTEL_CONSOLE_EXPORTER=true in docker-compose) so test
-// output stays clean; point an OTLP collector at the app for production.
-var telemetry = builder.Services.AddOpenTelemetry()
-    .WithTracing(tracing => tracing
-        .AddAspNetCoreInstrumentation()
-        .AddSource(AccountTelemetry.ActivitySourceName))
-    .WithMetrics(metrics => metrics
-        .AddAspNetCoreInstrumentation()
-        .AddMeter(AccountTelemetry.MeterName));
-
-if (Environment.GetEnvironmentVariable("OTEL_CONSOLE_EXPORTER") == "true")
-{
-    telemetry
-        .WithTracing(tracing => tracing.AddConsoleExporter())
-        .WithMetrics(metrics => metrics.AddConsoleExporter());
-}
-
 var app = builder.Build();
 
 // Reject known weak API keys outside Development: fail-closed must also cover
@@ -99,12 +67,10 @@ var app = builder.Build();
     var isWeakDefault = configuredKey is "dev-local-api-key-change-me" or "change-me" or "integration-test-api-key";
     if (!app.Environment.IsDevelopment() && (isWeakDefault || configuredKey.Length < 32))
     {
-        Log.Fatal("Refusing to start: Authentication:ApiKey is a weak/default value. Set a long random Authentication__ApiKey in Production.");
+        Console.Error.WriteLine("Refusing to start: Authentication:ApiKey is a weak/default value. Set a long random Authentication__ApiKey in Production.");
         throw new InvalidOperationException("Authentication:ApiKey must be a long random value in Production (set the Authentication__ApiKey environment variable).");
     }
 }
-
-app.UseSerilogRequestLogging();
 
 // Apply pending migrations. The application depends on PostgreSQL: if the
 // database is unreachable, the host does not start — there is no fallback.
@@ -190,7 +156,7 @@ app.Use(async (context, next) =>
     catch (Exception ex)
     {
         if (context.Response.HasStarted) throw;
-        Log.Error(ex, "Unhandled request {Method} {Path}", context.Request.Method, context.Request.Path);
+        app.Logger.LogError(ex, "Unhandled request {Method} {Path}", context.Request.Method, context.Request.Path);
         context.Response.StatusCode = StatusCodes.Status500InternalServerError;
         context.Response.ContentType = "application/json";
         await context.Response.WriteAsJsonAsync(
@@ -202,11 +168,6 @@ app.Use(async (context, next) =>
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
-    app.MapScalarApiReference(options =>
-    {
-        options.Title = "FinanceControl API";
-        options.Theme = ScalarTheme.Purple;
-    });
 }
 
 // HTTPS redirection only when HTTPS is configured (local Development with

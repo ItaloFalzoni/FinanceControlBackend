@@ -71,15 +71,15 @@ Validações de entrada (campos obrigatórios, limites de tamanho, valores posit
 
 ### Segurança
 
-A API exige **API key** em toda rota `/api/*`: o `ApiKeyMiddleware` compara o header **`X-Api-Key`** com a configuração `Authentication:ApiKey` (env `Authentication__ApiKey`, valor no `.env` → `API_KEY`) e responde **`401`** antes de chegar aos handlers. A chave é validada no startup (fail-closed: sem ela o host não sobe) e comparada em tempo constante. `/health`, `/health/ready`, OpenAPI e Scalar ficam fora de `/api` e continuam públicos (o healthcheck do container depende disso).
+A API exige **API key** em toda rota `/api/*`: o `ApiKeyMiddleware` compara o header **`X-Api-Key`** com a configuração `Authentication:ApiKey` (env `Authentication__ApiKey`, valor no `.env` → `API_KEY`) e responde **`401`** antes de chegar aos handlers. A chave é validada no startup (fail-closed: sem ela o host não sobe) e comparada em tempo constante. `/health`, `/health/ready` e o documento OpenAPI ficam fora de `/api` e continuam públicos (o healthcheck do container depende disso).
 
 A chave é **fixa e compartilhada**. Detalhes e evolução em [`docs/api-key.md`](docs/api-key.md).
 
 A chave pertence a quem **chama** a API e existe só no servidor do cliente. No front-end ela é injetada pelo proxy `app/api/*` e nunca chega ao browser. Para expor o serviço fora da rede local/privada, além da chave, proteja a camada de transporte (gateway, rede interna, mTLS) ou evolua para autenticação por usuário. Ver [Melhorias Futuras](#melhorias-futuras).
 
-### Documentação: OpenAPI via Scalar
+### Documentação: OpenAPI
 
-Em ambiente de desenvolvimento (`ASPNETCORE_ENVIRONMENT=Development`), a documentação interativa está disponível em `/scalar/v1`. O default do compose é `Production`, então a documentação fica desativada a menos que você opte por `Development`.
+Em ambiente de desenvolvimento (`ASPNETCORE_ENVIRONMENT=Development`), o contrato machine-readable está disponível em `/openapi/v1.json`.
 
 ### Testes
 
@@ -145,8 +145,6 @@ FinanceControl/
 │       │   ├── Dtos.cs                        # Records de request/response
 │       │   ├── Services/
 │       │   │   └── AccountService.cs          # Orquestrador dos casos de uso
-│       │   ├── Telemetry/
-│       │   │   └── AccountTelemetry.cs        # ActivitySource + Meter FinanceControl.Account
 │       │   └── Validators/
 │       │       └── RequestValidators.cs       # Validação de entrada (sem lib)
 │       │
@@ -299,18 +297,18 @@ A API ficará disponível em `http://localhost:8080`.
 O compose tem default `Production` (o `.env.example` já vem assim) — dev e prod usam o mesmo arquivo, troque apenas o `.env` para depurar localmente:
 
 ```bash
-# .env local para depuração (Scalar/OpenAPI habilitados)
+# .env local para depuração (OpenAPI habilitado)
 ASPNETCORE_ENVIRONMENT=Development
 POSTGRES_PASSWORD=dev-local-pg-password-change-me
 ```
 
-Com `ASPNETCORE_ENVIRONMENT=Production` (default) a documentação (`/scalar/v1`, `/openapi/*`) fica desativada; `/health` continua público para o healthcheck do container. Defina explicitamente `Development` só em ambiente local.
+Com `ASPNETCORE_ENVIRONMENT=Production` (default) a documentação (`/openapi/*`) fica desativada; `/health` continua público para o healthcheck do container. Defina explicitamente `Development` só em ambiente local.
 
 ### Documentação no Docker
 
 Disponível apenas com `ASPNETCORE_ENVIRONMENT=Development`:
 
-`http://localhost:8080/scalar/v1`
+`http://localhost:8080/openapi/v1.json`
 
 ### Parar os containers
 
@@ -323,7 +321,7 @@ docker compose down -v     # apaga também o volume (reset total do banco)
 
 ## Endpoints da API
 
-Toda rota `/api/*` exige o header **`X-Api-Key`** — sem a chave a resposta é **`401`** (ver [Segurança](#segurança)). `/health` fica fora de `/api` e é público.
+Toda rota `/api/*` exige o header **`X-Api-Key`** — sem a chave a resposta é **`401`** (ver [Segurança](#segurança)). `/health` fica fora de `/api` e é público. O contrato machine-readable (`/openapi/v1.json`) só existe em `Development`.
 
 | Método | Rota | Descrição |
 |--------|------|-----------|
@@ -423,8 +421,7 @@ curl -H "X-Api-Key: $API_KEY" http://localhost:5000/api/transactions
 ### Observabilidade
 
 - ✅ ~~**Health checks** estruturados (`/health` liveness + `/health/ready` com Postgres)~~ — concluído (`AddDbContextCheck`; `/health/live` dedicado segue como evolução trivial)
-- ✅ ~~Integração com **OpenTelemetry** (tracing + métricas)~~ — concluído (spans `account.deposit|withdraw`, contadores `deposit_total/withdraw_total`; console exporter opt-in via `OTEL_CONSOLE_EXPORTER=true`, default off no compose, OTLP-ready)
-- ✅ ~~Logging estruturado com **Serilog**~~ — concluído (JSON compacto no stdout + request logging; sink Elasticsearch/Seq segue como evolução)
+- Logging com o provedor nativo do ASP.NET (texto no stdout, coletado via Docker; sem sink externo)
 
 ### Resiliência
 

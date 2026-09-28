@@ -11,7 +11,6 @@ services:
       - ASPNETCORE_HTTP_PORTS=8080
       - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=${POSTGRES_DB:?POSTGRES_DB must be set - copy .env.example to .env};Username=${POSTGRES_USER:?POSTGRES_USER must be set - copy .env.example to .env};Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set - copy .env.example to .env}
       - Authentication__ApiKey=${API_KEY:?API_KEY must be set - copy .env.example to .env}
-      - OTEL_CONSOLE_EXPORTER=${OTEL_CONSOLE_EXPORTER:-false} # opt-in: true = traces/métricas no `docker compose logs`; default off para não poluir
     depends_on:
       postgres:
         condition: service_healthy

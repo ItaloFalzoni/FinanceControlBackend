@@ -6,13 +6,12 @@ Contexto profundo. Carregue apenas quando a tarefa tocar DI, camadas, fluxo de r
 
 ```
 HTTP
- └─ Serilog request logging
-     └─ Middleware global (Program.cs)      → captura DomainException → 422 | Exception → 500
-         └─ ApiKeyMiddleware                → sem X-Api-Key válida: 401
-             └─ Endpoint (AccountEndpoints)     → valida input com RequestValidators (estático) → inválido: 400
-                 └─ AccountService              → orquestração + map para DTOs; conta ausente do banco → null (+ spans/contadores OTel)
-                     └─ IAccountResolver + IAccountRepository → PostgresAccountRepository (Scoped, transacional)
-                         └─ Account (entidade)  → regras de negócio; lança exceções de domínio
+ └─ Middleware global (Program.cs)      → captura DomainException → 422 | Exception → 500
+     └─ ApiKeyMiddleware                → sem X-Api-Key válida: 401
+         └─ Endpoint (AccountEndpoints)     → valida input com RequestValidators (estático) → inválido: 400
+             └─ AccountService              → orquestração + map para DTOs; conta ausente do banco → null
+                 └─ IAccountResolver + IAccountRepository → PostgresAccountRepository (Scoped, transacional)
+                     └─ Account (entidade)  → regras de negócio; lança exceções de domínio
 ```
 
 Decisões de mapeamento de erro (não reproduzir de memória — conferir `Program.cs` e `AccountEndpoints.cs`):
@@ -72,11 +71,10 @@ Decisões de mapeamento de erro (não reproduzir de memória — conferir `Progr
 
 ## Documentação / infraestrutura existente
 
-- OpenAPI: `AddOpenApi()` + `ApiKeySecuritySchemeTransformer` (anuncia o security scheme `ApiKey` → header **`X-Api-Key`**, exigido em toda rota `/api/*`); `MapOpenApi()` e referência **Scalar** em `/scalar/v1` **apenas em Development**.
+- OpenAPI: `AddOpenApi()` + `ApiKeySecuritySchemeTransformer` (anuncia o security scheme `ApiKey` → header **`X-Api-Key`**, exigido em toda rota `/api/*`); `MapOpenApi()` expõe `/openapi/v1.json` **apenas em Development**.
 - Health: `/health` liveness-only (healthcheck do compose) + `/health/ready` com `AddDbContextCheck<FinanceControlDbContext>` (pacote `HealthChecks.EntityFrameworkCore 10.0.12`).
 - Sem rate limiting na aplicação (decisão deliberada, G6 — evolução via API gateway na infra com `429` + `Retry-After`; ver `README.md` → *Melhorias Futuras*).
-- Logs: Serilog (`Serilog.AspNetCore 10.0.0`, `CompactJsonFormatter` no stdout) + `UseSerilogRequestLogging`.
-- Traces/métricas: `Application/Telemetry/AccountTelemetry.cs` (`ActivitySource` + `Meter` `FinanceControl.Account`, spans `account.deposit|withdraw|balance|history`, contadores `deposit_total/withdraw_total/balance_read_total/history_read_total`); exportador console opt-in (`OTEL_CONSOLE_EXPORTER=true`, default off no compose; pacotes `OpenTelemetry.* 1.19.x`).
+- Logs: logging nativo do ASP.NET (`builder.Logging`, texto no stdout, coletado via Docker).
 - `public partial class Program { }` no fim de `Program.cs` é **obrigatório** para o `WebApplicationFactory` dos testes de integração — não remova, os testes existentes dependem dele.
 - Docker: multi-stage build sem etapa de teste (testes rodam em CI/local via `dotnet test` com Postgres; a integração exige banco e não há banco na fase de build). O compose sobe `postgres:18.6` (volume `postgres_data` montado em `/var/lib/postgresql` — layout do PG 18+; healthcheck `pg_isready`) e a API com `depends_on: service_healthy`. O compose interpola `${POSTGRES_DB}`, `${POSTGRES_USER}` e `${POSTGRES_PASSWORD}` do `.env` (raiz; `.env.example` é o modelo) para `ConnectionStrings__Postgres`; `ASPNETCORE_ENVIRONMENT` também vem do `.env` (default `Production`, mesmo compose para dev/prod).
 - **Reset total do banco** (produto novo / esquema recriado): `docker compose down -v` apaga o volume; as migrações são uma única `InitialCreate` (`bigint`, sem histórico — squash pré-produção, ver ADR-004). Para recriar migrações do zero: apague a pasta `Migrations` e rode o playbook abaixo com a connection string no ambiente (o `Program.cs` roda `Migrate()` no design-time):
@@ -84,4 +82,4 @@ Decisões de mapeamento de erro (não reproduzir de memória — conferir `Progr
 
 ## Pacotes já referenciados
 
-`Microsoft.AspNetCore.OpenApi 10.0.12`, `Scalar.AspNetCore 2.0.14`, `Npgsql.EntityFrameworkCore.PostgreSQL 10.0.3` (provider EF Core 10 para Postgres — único pacote novo da migração, G6) e `Microsoft.EntityFrameworkCore.Design 10.0.4` (`PrivateAssets=all`, só para gerar migrações; tool `dotnet-ef` 10.0.4 no manifest local `dotnet-tools.json`). Observabilidade (G6 justificado na trilha de arquiteto): `Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore 10.0.12`, `Serilog.AspNetCore 10.0.0`, `OpenTelemetry.Extensions.Hosting` + `OpenTelemetry.Instrumentation.AspNetCore` + `OpenTelemetry.Exporter.Console 1.19.x`. Nos testes: xunit 2.9.3, Microsoft.NET.Test.Sdk 17.14.0 e Microsoft.AspNetCore.Mvc.Testing 10.0.0 (usado pela `FinanceControlWebAppFactory` dos testes de integração; asserções via `Assert` nativo do xUnit — nenhuma lib de asserção). Cobertura: `coverlet.collector 10.0.1` nos dois projetos de teste (`PrivateAssets=all`, só o coletor VSTest — o relatório é gerado fora do build pelo tool `dotnet-reportgenerator-globaltool`; comandos no `README.md` → *Como Testar*). A validação de input é manual, sem pacote externo. Qualquer outro pacote exige justificativa (G6).
+`Microsoft.AspNetCore.OpenApi 10.0.12`, `Npgsql.EntityFrameworkCore.PostgreSQL 10.0.3` (provider EF Core 10 para Postgres — único pacote novo da migração, G6) e `Microsoft.EntityFrameworkCore.Design 10.0.4` (`PrivateAssets=all`, só para gerar migrações; tool `dotnet-ef` 10.0.4 no manifest local `dotnet-tools.json`). Observabilidade mínima: `Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore 10.0.12` (readiness do Postgres). Nos testes: xunit 2.9.3, Microsoft.NET.Test.Sdk 17.14.0 e Microsoft.AspNetCore.Mvc.Testing 10.0.0 (usado pela `FinanceControlWebAppFactory` dos testes de integração; asserções via `Assert` nativo do xUnit — nenhuma lib de asserção). Cobertura: `coverlet.collector 10.0.1` nos dois projetos de teste (`PrivateAssets=all`, só o coletor VSTest — o relatório é gerado fora do build pelo tool `dotnet-reportgenerator-globaltool`; comandos no `README.md` → *Como Testar*). A validação de input é manual, sem pacote externo. Qualquer outro pacote exige justificativa (G6).

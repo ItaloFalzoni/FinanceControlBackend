@@ -9,7 +9,7 @@ Contexto para agentes de IA. **Leia este arquivo inteiro antes de qualquer taref
 - Testes: `tests/FinanceControl.UnitTests` (`Domain/AccountTests`, `Domain/TransactionTests`, `Validators/RequestValidatorsTests`, sem banco); `tests/FinanceControl.IntegrationTests` (`Endpoints/AccountCreationTests` + `ApiKeyAuthTests` + `LedgerFlowTests` + `PaginationTests` + `ConcurrencyTests` + `PersistenceTests` + `SeedPersistenceTests` + `LegacyAccountTests` + `ContractTests` + `ServiceCoverageTests` + `HealthTests` + `StartupFailClosedTests`; HTTP exige Postgres, fail-closed puros não). Padrões: `agents/conventions.md`.
 - Regra central: **saldo é sempre calculado** (`Σ SignedAmount`), nunca armazenado; mutação só via `Account.Deposit()` / `Account.Withdraw()`.
 - **Conta única**: criada explicitamente via `POST /api/accounts` (`201`, `409` se já existe; em banco legado a conta **mais antiga** vence). Rotas: `/api/accounts`, `/api/balance`, `/api/transactions`, `/api/deposit`, `/api/withdraw`.
-- **API Key obrigatória**: toda rota `/api/*` exige o header `X-Api-Key` e responde `401` sem ela (`ApiKeyMiddleware`; config `Authentication:ApiKey`, env `Authentication__ApiKey`, valor em `.env` → `API_KEY`; fail-closed no startup). `/health`, OpenAPI e Scalar ficam fora de `/api` e continuam públicos.
+- **API Key obrigatória**: toda rota `/api/*` exige o header `X-Api-Key` e responde `401` sem ela (`ApiKeyMiddleware`; config `Authentication:ApiKey`, env `Authentication__ApiKey`, valor em `.env` → `API_KEY`; fail-closed no startup). `/health` e o documento OpenAPI ficam fora de `/api` e continuam públicos.
 
 ## Golden Rules (anti-alucinação)
 
@@ -59,8 +59,7 @@ src/FinanceControl.API/
     Authentication/                      # ApiKeyMiddleware (X-Api-Key em /api/*, fail-closed) + transformer OpenAPI
   Application/
     Dtos.cs                   # Todos os records de request/response
-    Services/AccountService.cs      # Orquestração + mapeamento p/ DTOs (spans/contadores via Telemetry)
-    Telemetry/AccountTelemetry.cs   # ActivitySource + Meter FinanceControl.Account
+    Services/AccountService.cs      # Orquestrador dos casos de uso
     Validators/RequestValidators.cs # Validação de input manual (sem lib) → 400
   Endpoints/AccountEndpoints.cs     # Minimal API → Application
 tests/                              # Unitários | Integração (criação+auth+fluxo+paginação+concorrência+persistência+legado+contrato+health+fail-closed)

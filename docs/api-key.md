@@ -15,7 +15,7 @@
   nunca existe modo "aberto por esquecimento".
 - A chave existe **só no servidor**: no front ela é injetada pelo proxy
   `app/api/*` e nunca chega ao browser (`NEXT_PUBLIC_*` proibido).
-- `/health`, `/health/ready`, OpenAPI e Scalar ficam fora de `/api` e
+- `/health`, `/health/ready` e o documento OpenAPI ficam fora de `/api` e
   continuam públicos (healthcheck do container depende disso).
 
 ## Por que é aceitável aqui

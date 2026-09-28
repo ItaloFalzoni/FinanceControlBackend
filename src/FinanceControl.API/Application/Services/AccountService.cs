@@ -1,4 +1,3 @@
-using FinanceControl.API.Application.Telemetry;
 using FinanceControl.API.Domain.Entities;
 using FinanceControl.API.Domain.Exceptions;
 using FinanceControl.API.Domain.Repositories;
@@ -27,11 +26,9 @@ public sealed class AccountService(IAccountRepository repository, IAccountResolv
 
     public async Task<BalanceResponse?> GetBalanceAsync(CancellationToken ct = default)
     {
-        using var activity = AccountTelemetry.StartOperation("account.balance");
         var balance = await resolver.GetCurrentBalanceAsync(ct);
         if (balance is null) return null;
 
-        AccountTelemetry.CountBalanceRead();
         return new BalanceResponse(balance.Value.AccountId, balance.Value.Balance, DateTimeOffset.UtcNow);
     }
 
@@ -47,7 +44,6 @@ public sealed class AccountService(IAccountRepository repository, IAccountResolv
         if (pageSize < 1 || pageSize > 200)
             throw new ArgumentOutOfRangeException(nameof(pageSize), "PageSize must be between 1 and 200.");
 
-        using var activity = AccountTelemetry.StartOperation("account.history");
         var history = await resolver.GetHistoryPageAsync(page, pageSize, ct);
         if (history is null) return null;
 
@@ -56,7 +52,6 @@ public sealed class AccountService(IAccountRepository repository, IAccountResolv
             .ToList()
             .AsReadOnly();
 
-        AccountTelemetry.CountHistoryRead();
         return new TransactionHistoryResponse(history.AccountId, history.Balance, page, pageSize, history.TotalCount, paged);
     }
 
@@ -64,8 +59,6 @@ public sealed class AccountService(IAccountRepository repository, IAccountResolv
         DepositRequest request,
         CancellationToken ct = default)
     {
-        using var activity = AccountTelemetry.StartOperation("account.deposit", request.Amount);
-
         var account = await GetAccountOrNullAsync(ct);
         if (account is null) return null;
 
@@ -78,7 +71,6 @@ public sealed class AccountService(IAccountRepository repository, IAccountResolv
         {
             return null;
         }
-        AccountTelemetry.CountDeposit();
 
         return MapTransactionToResponse(transaction);
     }
@@ -87,8 +79,6 @@ public sealed class AccountService(IAccountRepository repository, IAccountResolv
         WithdrawRequest request,
         CancellationToken ct = default)
     {
-        using var activity = AccountTelemetry.StartOperation("account.withdraw", request.Amount);
-
         var account = await GetAccountOrNullAsync(ct);
         if (account is null) return null;
 
@@ -101,7 +91,6 @@ public sealed class AccountService(IAccountRepository repository, IAccountResolv
         {
             return null;
         }
-        AccountTelemetry.CountWithdrawal();
 
         return MapTransactionToResponse(transaction);
     }

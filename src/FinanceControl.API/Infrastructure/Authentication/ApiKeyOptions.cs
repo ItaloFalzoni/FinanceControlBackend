@@ -5,7 +5,7 @@ namespace FinanceControl.API.Infrastructure.Authentication;
 /// startup, so the application never starts without a key (fail-closed: no
 /// silent "everything is open" mode). The front sends the key on every
 /// <c>/api/*</c> request in the <c>X-Api-Key</c> header; health and the
-/// OpenAPI/Scalar docs stay public.
+/// OpenAPI document stay public.
 /// </summary>
 public sealed class ApiKeyOptions
 {

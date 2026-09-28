@@ -9,7 +9,7 @@ namespace FinanceControl.IntegrationTests.Endpoints;
 /// API key contract: every /api/* route answers 401 without a key (or with a
 /// wrong one) before touching the service, and runs normally with the key.
 /// /health and the OpenAPI document stay public so the container healthcheck
-/// and the Scalar reference UI keep working.
+/// keeps working.
 /// </summary>
 public sealed class ApiKeyAuthTests : IDisposable
 {

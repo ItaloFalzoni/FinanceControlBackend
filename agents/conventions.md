@@ -12,7 +12,7 @@ Carregue ao escrever ou editar C# (`src/` ou `tests/`). Siga o estilo do arquivo
 - Exceptions: herdam de `DomainException` (mensagem em inglês, formato parelha com as existentes).
 - Validação de **input** (formato, obrigatoriedade, limites) → métodos estáticos em `Application/Validators/RequestValidators.cs` (sem pacote externo). Regra de **negócio** (saldo etc.) → dentro da entidade de domínio. Não troque os dois de lugar.
 - Comentários em inglês; seção headers com `// ── Nome ──...` como nos arquivos existentes.
-- Cada endpoint novo precisa de `.WithName()`, `.WithSummary()` e `.Produces<T>()` corretos (viram documentação OpenAPI/Scalar).
+- Cada endpoint novo precisa de `.WithName()`, `.WithSummary()` e `.Produces<T>()` corretos (viram documentação OpenAPI).
 
 ## Testes
 

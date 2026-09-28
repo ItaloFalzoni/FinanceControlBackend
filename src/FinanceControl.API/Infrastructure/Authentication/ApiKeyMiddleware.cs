@@ -6,8 +6,8 @@ using Microsoft.Extensions.Options;
 namespace FinanceControl.API.Infrastructure.Authentication;
 
 /// <summary>
-/// Enforces the shared API key on every /api/* request. Health, OpenAPI and
-/// Scalar do not live under /api, so they stay public (container healthcheck
+/// Enforces the shared API key on every /api/* request. Health and the OpenAPI
+/// document do not live under /api, so they stay public (container healthcheck
 /// and docs). The configured key is resolved via IOptions.Value, so a missing
 /// key fails the host at startup (fail-closed) instead of opening the API.
 /// </summary>

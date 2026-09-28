@@ -4,8 +4,8 @@ using Microsoft.OpenApi;
 namespace FinanceControl.API.Infrastructure.Authentication;
 
 /// <summary>
-/// Declares the API key security scheme on the OpenAPI document so the Scalar
-/// reference UI (and any generated client) knows that every <c>/api/*</c>
+/// Declares the API key security scheme on the OpenAPI document so any
+/// generated client knows that every <c>/api/*</c>
 /// operation expects the <c>X-Api-Key</c> header. The scheme only documents
 /// the contract — enforcement happens in <c>ApiKeyMiddleware</c>.
 /// </summary>
