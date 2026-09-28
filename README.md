@@ -206,7 +206,7 @@ Com `ASPNETCORE_ENVIRONMENT=Development`, abra no navegador: `https://localhost:
 
 ## Como Testar
 
-> Sem banco, sem Docker: `dotnet test` roda a suíte completa em <1s.
+> `dotnet test --filter 'Suite!=Slow'` roda o rápido sem banco (<1s). A suíte completa exige `docker compose up -d postgres` (`ConcurrencyTests`, ~54s).
 
 ### Executar todos os testes
 

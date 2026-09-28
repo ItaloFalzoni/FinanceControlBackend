@@ -49,7 +49,7 @@ Decisões de mapeamento de erro (não reproduzir de memória — conferir `Progr
 - **Concorrência:** `PostgresAccountRepository.CreateSingleAsync` abre transação + `pg_advisory_xact_lock`, re-lê só o header (helper privado `GetOldestHeaderAsync`, sem join de transações) e só insere se vazio — duplo clique/retry/duas réplicas viram `1x201 + 1x409`, nunca 2 linhas (detalhes e alternativa singleton físico em `docs/adr/003-conta-unica.md`).
 - **Desempate:** em banco legado com mais de uma linha, a conta de menor `created_at` (e menor `id`) vence — o helper privado `OldestAccountsFirst()` é a única fonte dessa regra; `GetOldestHeaderAsync` (header/saldo/histórico/criação) e `GetSingleAccountAsync` (agregado dos writes) só acrescentam `Select`/`Include` em cima dele.
 - **Histórico paginado no banco:** `GetHistoryPageAsync` resolve COUNT + SUM + Skip/Take em SQL (mais recente primeiro, desempate por `id`; `Skip` em `checked`); nada de `Skip/Take` em memória. `AccountService.GetHistoryAsync` valida `page >= 1, 1 <= pageSize <= 200` (defesa em profundidade além do endpoint). `GetCurrentBalanceAsync` é header + SUM; só Deposit/Withdraw carregam o agregado completo.
-- **Sem conta ainda** (first-run) ⇒ service devolve `null` ⇒ `404` (coberto em `tests/.../Endpoints/PersistenceTests.cs` + `AccountCreationTests.cs`); o front mostra a tela "Começar".
+- **Sem conta ainda** (first-run) ⇒ service devolve `null` ⇒ `404`; o front mostra a tela "Começar".
 
 **Ao adicionar qualquer serviço:** registre no `Program.cs` na seção `// ── Services ──`, senão o handler lança exceção de runtime em tempo de request (a suíte não cobre o registro de serviços, então essa falha só aparece na verificação manual).
 

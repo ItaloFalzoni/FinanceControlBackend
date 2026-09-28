@@ -16,7 +16,7 @@
   todo o app.
 - Consequências:
   - (+) Deploy não escreve dados; first-run explícito e auditável.
-  - (+) Criação concorrente segura (coberto em `AccountCreationTests`).
+  - (+) Criação concorrente segura via lock consultivo (desenho sem teste dedicado; a prova de concorrência viva é `ConcurrencyTests` dos saques).
   - (+) Nenhuma rota carrega `{id}` (singleton continua).
   - (−) Cliente precisa chamar a criação antes do fluxo (front mostra "Começar").
   - (−) Multi-tenant exige migração de contrato (`IAccountResolver` dedicado + prefixo `/api/v1`).
